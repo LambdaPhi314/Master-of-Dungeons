@@ -1,3 +1,21 @@
+// Copyright 2019 The Druid Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! An example of a custom drawing widget.
+//! We draw an image, some text, a shape, and a curve.
+
+// On Windows platform, don't show a console when opening the app.
 #![windows_subsystem = "windows"]
 
 use druid::FileDialogOptions;
@@ -64,6 +82,7 @@ impl Widget<AppData> for Grid {
             Event::MouseDown(mouse) => {
                 ctx.set_active(true);
                 self.last_grab_point = mouse.pos;
+                // dbg!(mouse);
                 ctx.request_paint();
             },
             Event::MouseUp(_mouse) => {
@@ -71,6 +90,7 @@ impl Widget<AppData> for Grid {
                     ctx.set_active(false);
                     ctx.request_paint();
                 }
+                //dbg!(mouse);
             },
             Event::MouseMove(mouse) => {
                 if ctx.is_active() {
@@ -223,37 +243,41 @@ impl Widget<AppData> for InfGrid {
     fn paint(&mut self, ctx: &mut PaintCtx, data: &AppData, _env: &Env) {
 
         let size = ctx.size();
-        let stroke_color = Color::rgb8(255, 255, 255);
-        let mut count = 1;
+        let mut stroke_color = Color::rgb8(255, 255, 255);
 
-        if data.count != "".to_string() {
-            count = data.count.parse().unwrap();
-            if count <= 1 {
-                count = 1
+        for i in 0..(size.width/(data.square_side*data.grid_scale.new)+2.0) as i32{ //vertikal
+            if(i == (self.offset.x/(data.square_side*data.grid_scale.new)) as i32){
+                stroke_color = Color::rgb8(255,0,0);
             }
-        }
-
-        for i in 0..(size.height/(data.square_side*data.grid_scale.new)+2.0) as i32{ //vertikal
+            else {
+                stroke_color = Color::rgb8(255, 255, 255)
+            }
             ctx.stroke(Line::new(
                 Point::new(
-                    (i as f64*data.square_side*data.grid_scale.new + self.offset.x % data.square_side*data.grid_scale.new),
-                    (0.0 + self.offset.y % data.square_side*data.grid_scale.new)
+                    (i as f64*data.square_side*data.grid_scale.new + self.offset.x % (data.square_side*data.grid_scale.new)),
+                    min(0.0 + self.offset.y % (data.square_side*data.grid_scale.new),0.0)
                 ),
                 Point::new(
-                    (i as f64*data.square_side*data.grid_scale.new + self.offset.x % data.square_side*data.grid_scale.new),
-                    (count as f64*data.square_side*data.grid_scale.new + self.offset.y % data.square_side*data.grid_scale.new)
+                    (i as f64*data.square_side*data.grid_scale.new + self.offset.x % (data.square_side*data.grid_scale.new)),
+                    (size.height)
                 )
             ), &stroke_color, 1.0);  
         }
-        for i in 0..(size.width/(data.square_side*data.grid_scale.new)+2.0) as i32{ //horizontal
+        for i in 0..(size.height/(data.square_side*data.grid_scale.new)+2.0) as i32{ //horizontal
+            if(i == (self.offset.y/(data.square_side*data.grid_scale.new)) as i32){
+                stroke_color = Color::rgb8(255,0,0);
+            }
+            else {
+                stroke_color = Color::rgb8(255, 255, 255)
+            }
             ctx.stroke(Line::new(
                 Point::new(
-                    (0.0 + self.offset.x % data.square_side*data.grid_scale.new), 
-                    (i as f64*data.square_side*data.grid_scale.new + self.offset.y % data.square_side*data.grid_scale.new)
+                    min(0.0 + self.offset.x % (data.square_side*data.grid_scale.new),0.0), 
+                    (i as f64*data.square_side*data.grid_scale.new + self.offset.y % (data.square_side*data.grid_scale.new))
                 ),
                 Point::new(
-                    (count as f64*data.square_side*data.grid_scale.new + self.offset.x % data.square_side*data.grid_scale.new), 
-                    (i as f64*data.square_side*data.grid_scale.new + self.offset.y % data.square_side*data.grid_scale.new)
+                    (size.width), 
+                    (i as f64*data.square_side*data.grid_scale.new + self.offset.y % (data.square_side*data.grid_scale.new))
                 )
             ), &stroke_color, 1.0);  
         }
@@ -278,6 +302,18 @@ pub fn main() {
 
 fn build_root_widget() -> impl Widget<AppData> {
     let grid = InfGrid::new();
+    // let button = Button::new("Make config window")
+    //     .on_click(|ctx: &mut EventCtx, data: &mut AppData, env: &Env| {
+    //         ctx.new_sub_window(
+    //             WindowConfig::default()
+    //                 .show_titlebar(false)
+    //                 .window_size(Size::new(100., 100.)),
+    //             Slider::new(),
+    //             data.clone(),
+    //             env.clone(),
+    //         );
+    //     })
+    //     .center();
     let slider = Slider::new()
         .with_range(1.0, 100.0)
         .lens(AppData::square_side);
