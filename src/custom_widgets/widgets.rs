@@ -1,9 +1,13 @@
 use druid::{Widget, Lens, Data, EventCtx, Env, LifeCycleCtx, 
     LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
     Color, RenderContext, Event, Rect};
-use druid::widget::Controller;
 use im::Vector;
 use kurbo::{Point, Vec2, Line, Size};
+// 
+// pub const WINDOW_CLOSE_IMAGE: Image = Image::new(ImageBuf::from_data(include_bytes!("./assets/PicWithAlpha.png")).unwrap());
+// const WINDOW_CLOSE_IMAGE: Image = 
+// const WINDOW_CLOSE_IMAGE_POS: Rect = Rect::new(x0, y0, x1, y1);
+
 
 #[derive(Clone, Data)]
 pub struct Grid {
@@ -176,8 +180,6 @@ impl Widget<AppData> for InfGrid {
                 }
             },
             Event::Wheel(mouse) => {
-                dbg!(mouse);
-                println!("{}", self.grid_scale.old);
                 self.grid_scale.old = self.grid_scale.new;
 
                 if mouse.wheel_delta.y > 0.0 {
@@ -283,12 +285,30 @@ struct TabContent {
 }
 
 impl Widget<AppData> for TabHandle {
-    fn paint(&mut self, ctx: &mut PaintCtx, _data: &AppData, _env: &Env) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut AppData, _env: &Env) {
         let size = ctx.size();
-        ctx.fill(Rect::new(0.0, 0.0, size.width, 30.0), &Color::rgb8(155, 155, 155))
-    }
-    fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut AppData, _env: &Env) {
-        
+        match event {
+            Event::MouseDown(mouse) => {
+                let mut win = ctx.window().clone();
+                if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 40.0 {
+                    ctx.window().close();
+                } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 80.0 {
+                    if win.get_window_state() == druid::WindowState::Restored {
+                        win.set_window_state(druid::WindowState::Maximized)
+                    } else {
+                        win.set_window_state(druid::WindowState::Restored);
+                    }
+                } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 120.0 {
+                    win.set_window_state(druid::WindowState::Minimized);
+                }
+            },
+            Event::MouseMove(mouse) => {
+                if mouse.pos.x < size.width - 120.0 {
+                    ctx.window().handle_titlebar(true);
+                }
+            }
+            _ => {}
+        }
     }
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &AppData, _data: &AppData, _env: &Env) {
         
@@ -299,16 +319,23 @@ impl Widget<AppData> for TabHandle {
     fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &AppData, _env: &Env) -> Size {
         bc.max()
     }
-}
-
-pub struct WindowController {
-}
-
-impl<T, W: Widget<T>> Controller<T, W> for WindowController {
-    fn event(&mut self, _child: &mut W, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
-        if let Event::MouseMove(_) = event {
-            ctx.window().handle_titlebar(true)
-       }
+    fn paint(&mut self, ctx: &mut PaintCtx, _data: &AppData, _env: &Env) {
+        let size = ctx.size();
+        ctx.fill(Rect::new(0.0, 0.0, size.width, 30.0), &Color::rgb8(155, 155, 155));
+        ctx.fill(Rect::new(size.width - 120.0, 0.0, size.width - 80.0, 30.0), &Color::rgb8(51, 153, 255));
+        ctx.fill(Rect::new(size.width - 80.0, 0.0, size.width - 40.0, 30.0), &Color::rgb8(0, 255, 0));
+        ctx.fill(Rect::new(size.width - 40.0, 0.0, size.width, 30.0), &Color::rgb8(255, 0, 0));
     }
 }
+
+// pub struct WindowController {
+// }
+
+// impl<T, W: Widget<T>> Controller<T, W> for WindowController {
+//     fn event(&mut self, _child: &mut W, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
+//         if let Event::MouseMove(_) = event {
+//             ctx.window().handle_titlebar(true)
+//        }
+//     }
+// }
 

@@ -2,7 +2,6 @@
 
 use druid::FileDialogOptions;
 use druid::FileSpec;
-use druid::WidgetExt;
 use druid::widget::Align;
 use druid::widget::Button;
 use druid::widget::{prelude::*, Flex};
@@ -13,7 +12,7 @@ use druid::{ AppLauncher, LocalizedString,
 mod custom_widgets;
 
 pub use crate::custom_widgets::widgets::{Grid, AppData, InfGrid, 
-    GridScale, TabHandle, TabList, WindowController};
+    GridScale, TabHandle, TabList, };
 
 pub fn main() {
     let window = WindowDesc::new(build_root_widget())
@@ -35,7 +34,7 @@ pub fn main() {
 fn build_root_widget() -> impl Widget<AppData> {
     let grid = InfGrid::new();
    
-    let tab = TabHandle::new().controller(WindowController{});
+    let tab = TabHandle::new();//.controller(WindowController{});
 
     // let slider = Slider::new()
     //     .with_range(1.0, 100.0)
