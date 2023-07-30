@@ -9,7 +9,7 @@ use kurbo::{Point, Vec2, Line, Size};
 // const WINDOW_CLOSE_IMAGE_POS: Rect = Rect::new(x0, y0, x1, y1);
 
 
-#[derive(Clone, Data)]
+#[derive(Debug, Clone, Data)]
 pub struct Grid {
     offset: Vec2,
     last_grab_point: Point,
@@ -29,7 +29,7 @@ pub struct AppData {
     pub tab_data: TabList,
 }
 
-#[derive(Clone, Data)]
+#[derive(Debug, Clone, Data)]
 pub struct GridScale {
     old: f64,
     new: f64,
@@ -256,7 +256,7 @@ impl Widget<AppData> for InfGrid {
 
 #[derive(Clone, Data)]
 pub struct TabHandle {
-    tab_list: TabList,
+    tab_list: TabList, 
 }
 
 impl TabHandle {
@@ -265,27 +265,33 @@ impl TabHandle {
     }
 }
 
-#[derive(Clone, Data)]
+#[derive(Debug, Clone, Data)]
 pub struct TabList {
-    tabs: Vector<TabContent>,
+    tabs: Vector<TabData>,
+    active_tab_index: u8,
 }
 
 impl TabList {
-    pub fn new() -> Self{
+    pub fn new() -> Self {
         let mut vec = Vector::new();
-        vec.push_back(TabContent{layout: Grid::new(), tab_id: 0});
-        TabList { tabs: vec }
+        vec.push_back(TabData{layout: Grid::new(), tab_id: 0, tab_name: "unsaved".to_string()});
+        TabList { tabs: vec, active_tab_index: 0 }
     } 
+
+    pub fn add_tab(&mut self) {
+        self.tabs.push_back(TabData{layout: Grid::new(), tab_id: 0, tab_name: "unsaved".to_string()});
+    }
 }
 
-#[derive(Clone, Data)]
-struct TabContent {
+#[derive(Debug, Clone, Data)]
+struct TabData {
     layout: Grid,
     tab_id: u8,
+    tab_name: String,
 }
 
-impl Widget<AppData> for TabHandle {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut AppData, _env: &Env) {
+impl Widget<AppData> for TabHandle { 
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppData, _env: &Env) {
         let size = ctx.size();
         match event {
             Event::MouseDown(mouse) => {
@@ -300,10 +306,15 @@ impl Widget<AppData> for TabHandle {
                     }
                 } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 120.0 {
                     win.set_window_state(druid::WindowState::Minimized);
+                } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 150.0 {
+                    dbg!(mouse);
+                    self.tab_list.add_tab();
+                    println!("{:?}", data.tab_data);
+                    ctx.request_paint();
                 }
             },
             Event::MouseMove(mouse) => {
-                if mouse.pos.x < size.width - 120.0 {
+                if mouse.pos.x < size.width - 150.0 {
                     ctx.window().handle_titlebar(true);
                 }
             }
@@ -325,6 +336,16 @@ impl Widget<AppData> for TabHandle {
         ctx.fill(Rect::new(size.width - 120.0, 0.0, size.width - 80.0, 30.0), &Color::rgb8(51, 153, 255));
         ctx.fill(Rect::new(size.width - 80.0, 0.0, size.width - 40.0, 30.0), &Color::rgb8(0, 255, 0));
         ctx.fill(Rect::new(size.width - 40.0, 0.0, size.width, 30.0), &Color::rgb8(255, 0, 0));
+        ctx.fill(Rect::new(size.width - 150.0, 5.0, size.width - 130.0, 25.0), &Color::rgb8(164, 149, 124));
+
+        let tab_iter = self.tab_list.tabs.iter();
+        let mut draw_offset = 0;
+        for _i in tab_iter {
+            ctx.fill(Rect::new((draw_offset as f64 * 80.0) + ((draw_offset + 1) as f64 * 2.0), 2.0, ((draw_offset + 1) as f64 * 80.0) + ((draw_offset + 1) as f64 * 2.0), 28.0), 
+            &Color::rgb8(255, 255, 255));
+            draw_offset += 1;
+            println!("{:?}", _i);
+        }
     }
 }
 
