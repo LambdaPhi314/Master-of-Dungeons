@@ -1,15 +1,16 @@
 use druid::{Widget, Lens, Data, EventCtx, Env, LifeCycleCtx, 
     LifeCycle, UpdateCtx, LayoutCtx, BoxConstraints, PaintCtx, 
-    Color, RenderContext, Event, Rect};
+    Color, RenderContext, Event, Rect, widget::{Label, Axis}, WindowState};
 use im::Vector;
 use kurbo::{Point, Vec2, Line, Size};
+use crate::custom_widgets::tabs::{TabInfo, TabsEdge, TabsPolicy, TabsTransition, };
 // 
 // pub const WINDOW_CLOSE_IMAGE: Image = Image::new(ImageBuf::from_data(include_bytes!("./assets/PicWithAlpha.png")).unwrap());
 // const WINDOW_CLOSE_IMAGE: Image = 
 // const WINDOW_CLOSE_IMAGE_POS: Rect = Rect::new(x0, y0, x1, y1);
 
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone, Data, PartialEq)]
 pub struct Grid {
     offset: Vec2,
     last_grab_point: Point,
@@ -22,14 +23,22 @@ impl Grid {
     }
 }
 
-#[derive(Clone, Data)]
+#[derive(Clone, Data, Lens)]
 pub struct AppData {
     pub square_side: f64,
     pub count: String,
-    pub tab_data: TabList,
+    pub advanced: DynamicTabData,
+    pub tab_config: TabConfig,
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Data, Clone, Lens)]
+pub struct TabConfig {
+    pub axis: Axis,
+    pub edge: TabsEdge,
+    pub transition: TabsTransition,
+}
+
+#[derive(Debug, Clone, Data, PartialEq)]
 pub struct GridScale {
     old: f64,
     new: f64,
@@ -233,8 +242,8 @@ impl Widget<AppData> for InfGrid {
                 )
             ), &stroke_color, 1.0);  
         }
-        for i in 0..(size.height/(data.square_side*self.grid_scale.new)+2.0) as i32{ //horizontal
-            if i == (self.offset.y/(data.square_side*self.grid_scale.new)) as i32 {
+        for i in 0..(size.height/(data.square_side*self.grid_scale.new)+1.0) as i32{ //horizontal
+            if i == (self.offset.y/(data.square_side*self.grid_scale.new)) as i32 && i != 0 {
                 stroke_color = Color::rgb8(255,0,0);
             }
             else {
@@ -254,71 +263,125 @@ impl Widget<AppData> for InfGrid {
     }
 }
 
-#[derive(Clone, Data)]
-pub struct TabHandle {
-    tab_list: TabList, 
-}
 
-impl TabHandle {
-    pub fn new() -> Self {
-        TabHandle { tab_list: TabList::new() }
+
+
+#[derive(Clone, Data)]
+pub struct NumberedTabs;
+
+impl TabsPolicy for NumberedTabs {
+    type Key = usize;
+    type Build = ();
+    type Input = DynamicTabData;
+    type LabelWidget = Label<DynamicTabData>;
+    type BodyWidget = Label<DynamicTabData>;
+
+    fn tabs_changed(&self, old_data: &DynamicTabData, data: &DynamicTabData) -> bool {
+        old_data.tabs_key() != data.tabs_key()
+    }
+
+    fn tabs(&self, data: &DynamicTabData) -> Vec<Self::Key> {
+        data.tab_labels.iter().copied().collect()
+    }
+
+    fn tab_info(&self, key: Self::Key, _data: &DynamicTabData) -> TabInfo<DynamicTabData> {
+        TabInfo::new(format!("Tab {key:?}"), true)
+    }
+
+    fn tab_body(&self, key: Self::Key, _data: &DynamicTabData) -> Label<DynamicTabData> {
+        Label::new(format!("Dynamic tab body {key:?}"))
+    }
+
+    fn close_tab(&self, key: Self::Key, data: &mut DynamicTabData) {
+        if let Some(idx) = data.tab_labels.index_of(&key) {
+            data.remove_tab(idx)
+        }
+    }
+
+    fn tab_label(
+        &self,
+        _key: Self::Key,
+        info: TabInfo<Self::Input>,
+        _data: &Self::Input,
+    ) -> Self::LabelWidget {
+        Self::default_make_label(info)
     }
 }
 
-#[derive(Debug, Clone, Data)]
-pub struct TabList {
-    tabs: Vector<TabData>,
-    active_tab_index: u8,
+#[derive(Data, Clone, Lens)]
+pub struct DynamicTabData {
+    highest_tab: usize,
+    removed_tabs: usize,
+    tab_labels: Vector<usize>,
 }
 
-impl TabList {
-    pub fn new() -> Self {
-        let mut vec = Vector::new();
-        vec.push_back(TabData{layout: Grid::new(), tab_id: 0, tab_name: "unsaved".to_string()});
-        TabList { tabs: vec, active_tab_index: 0 }
-    } 
+impl DynamicTabData {
+    pub fn new(highest_tab: usize) -> Self {
+        DynamicTabData {
+            highest_tab,
+            removed_tabs: 0,
+            tab_labels: (1..=highest_tab).collect(),
+        }
+    }
 
     pub fn add_tab(&mut self) {
-        self.tabs.push_back(TabData{layout: Grid::new(), tab_id: 0, tab_name: "unsaved".to_string()});
+        self.highest_tab += 1;
+        self.tab_labels.push_back(self.highest_tab);
+    }
+
+    pub fn remove_tab(&mut self, idx: usize) {
+        if idx >= self.tab_labels.len() {
+            tracing::warn!("Attempt to remove non existent tab at index {}", idx)
+        } else {
+            self.removed_tabs += 1;
+            self.tab_labels.remove(idx);
+        }
+    }
+
+    // This provides a key that will monotonically increase as interactions occur.
+    pub fn tabs_key(&self) -> (usize, usize) {
+        (self.highest_tab, self.removed_tabs)
     }
 }
 
-#[derive(Debug, Clone, Data)]
-struct TabData {
-    layout: Grid,
-    tab_id: u8,
-    tab_name: String,
+pub enum WindowActions {
+    Minimize,
+    Resize,
+    Close
 }
 
-impl Widget<AppData> for TabHandle { 
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppData, _env: &Env) {
-        let size = ctx.size();
+pub struct WindowHandleButton {
+    action: WindowActions,
+}
+
+impl WindowHandleButton {
+    pub fn new( action: WindowActions ) -> Self {
+        WindowHandleButton { action: action }
+    }
+}
+
+impl Widget<AppData> for WindowHandleButton {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut AppData, _env: &Env) {
         match event {
-            Event::MouseDown(mouse) => {
+            Event::MouseDown(_) => {
                 let mut win = ctx.window().clone();
-                if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 40.0 {
-                    ctx.window().close();
-                } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 80.0 {
-                    if win.get_window_state() == druid::WindowState::Restored {
-                        win.set_window_state(druid::WindowState::Maximized)
-                    } else {
-                        win.set_window_state(druid::WindowState::Restored);
+                match self.action {
+                    WindowActions::Minimize => {
+                        win.set_window_state(WindowState::Minimized)
                     }
-                } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 120.0 {
-                    win.set_window_state(druid::WindowState::Minimized);
-                } else if mouse.pos.y <= 30.0 && mouse.pos.x >= size.width - 150.0 {
-                    dbg!(mouse);
-                    self.tab_list.add_tab();
-                    println!("{:?}", data.tab_data);
-                    ctx.request_paint();
-                }
-            },
-            Event::MouseMove(mouse) => {
-                if mouse.pos.x < size.width - 150.0 {
-                    ctx.window().handle_titlebar(true);
+                    WindowActions::Resize => {
+                        if win.get_window_state() == druid::WindowState::Restored {
+                            win.set_window_state(druid::WindowState::Maximized)
+                        } else {
+                            win.set_window_state(druid::WindowState::Restored);
+                        }
+                    }
+                    WindowActions::Close => {
+                        win.close()
+                    }
                 }
             }
-            _ => {}
+        _=> {}
         }
     }
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &AppData, _data: &AppData, _env: &Env) {
@@ -332,31 +395,17 @@ impl Widget<AppData> for TabHandle {
     }
     fn paint(&mut self, ctx: &mut PaintCtx, _data: &AppData, _env: &Env) {
         let size = ctx.size();
-        ctx.fill(Rect::new(0.0, 0.0, size.width, 30.0), &Color::rgb8(155, 155, 155));
-        ctx.fill(Rect::new(size.width - 120.0, 0.0, size.width - 80.0, 30.0), &Color::rgb8(51, 153, 255));
-        ctx.fill(Rect::new(size.width - 80.0, 0.0, size.width - 40.0, 30.0), &Color::rgb8(0, 255, 0));
-        ctx.fill(Rect::new(size.width - 40.0, 0.0, size.width, 30.0), &Color::rgb8(255, 0, 0));
-        ctx.fill(Rect::new(size.width - 150.0, 5.0, size.width - 130.0, 25.0), &Color::rgb8(164, 149, 124));
-
-        let tab_iter = self.tab_list.tabs.iter();
-        let mut draw_offset = 0;
-        for _i in tab_iter {
-            ctx.fill(Rect::new((draw_offset as f64 * 80.0) + ((draw_offset + 1) as f64 * 2.0), 2.0, ((draw_offset + 1) as f64 * 80.0) + ((draw_offset + 1) as f64 * 2.0), 28.0), 
-            &Color::rgb8(255, 255, 255));
-            draw_offset += 1;
-            println!("{:?}", _i);
+        match self.action {
+            WindowActions::Minimize => {
+                ctx.fill(Rect::new(0.0, 0.0, size.width, size.height), &Color::rgb8(51, 153, 255))
+            }
+            WindowActions::Resize => {
+                ctx.fill(Rect::new(0.0, 0.0, size.width, size.height), &Color::rgb8(0, 255, 0))
+            }
+            WindowActions::Close => {
+                ctx.fill(Rect::new(0.0, 0.0, size.width, size.height), &Color::rgb8(255, 0, 0))
+            }
         }
+        
     }
 }
-
-// pub struct WindowController {
-// }
-
-// impl<T, W: Widget<T>> Controller<T, W> for WindowController {
-//     fn event(&mut self, _child: &mut W, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
-//         if let Event::MouseMove(_) = event {
-//             ctx.window().handle_titlebar(true)
-//        }
-//     }
-// }
-
